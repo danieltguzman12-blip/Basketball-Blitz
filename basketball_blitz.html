@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Basketball Blitz</title>
+<style>
+:root{--ink:#17233b;--orange:#ff8a24;--cream:#fff5e8;--blue:#2463a6}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 0%,#284d7c,#101a30 68%);font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:white;display:flex;align-items:center;justify-content:center;padding:18px}
+.wrap{width:min(960px,100%)}header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 4px 12px}.brand{font-weight:1000;letter-spacing:1px;font-size:clamp(22px,4vw,34px)}.brand span{color:#ff9b39}.sub{color:#c4d2e7;font-size:12px;letter-spacing:2px;font-weight:800}.hud{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:10px}.stat{background:#ffffff12;border:1px solid #ffffff24;border-radius:13px;padding:9px 12px;text-align:center}.stat small{display:block;color:#b9c8dc;font-size:10px;letter-spacing:1.5px;font-weight:800}.stat strong{font-size:clamp(18px,3vw,26px);font-variant-numeric:tabular-nums}.gamebox{position:relative;border:2px solid #ffffff25;border-radius:20px;overflow:hidden;box-shadow:0 22px 70px #0008;background:#dceeff}canvas{display:block;width:100%;height:auto;touch-action:none}.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#101a30b8;padding:20px}.panel{max-width:440px;text-align:center;background:#14233cee;border:1px solid #ffffff35;border-radius:20px;padding:26px;box-shadow:0 15px 50px #0006}.panel h1{font-size:34px;line-height:1;margin:0 0 10px}.panel p{color:#d6e0ee;line-height:1.5}.btn{border:0;border-radius:999px;background:linear-gradient(135deg,#ffb04a,#ff7624);color:#2c1b0d;font-size:16px;font-weight:950;padding:13px 28px;cursor:pointer;box-shadow:0 5px 0 #b84b12}.btn:active{transform:translateY(3px);box-shadow:0 2px 0 #b84b12}.hint{color:#c4d2e7;text-align:center;font-size:12px;margin:11px 0 0}.footer{display:flex;justify-content:space-between;align-items:center;margin-top:12px;color:#b8c7dc;font-size:12px;gap:10px}.footer button{background:#ffffff14;border:1px solid #ffffff30;color:white;border-radius:20px;padding:8px 13px;cursor:pointer;font-weight:700}
+@media(max-width:520px){body{padding:10px}.hud{gap:5px}.stat{padding:7px 4px}.stat small{font-size:9px}.footer{font-size:10px}}
+</style></head><body><main class="wrap">
+<header><div><div class="brand">🏀 BASKETBALL <span>BLITZ</span></div><div class="sub">BEAT THE BUZZER • ARCADE SHOOTOUT</div></div><div style="font-size:28px">🔥</div></header>
+<section class="hud"><div class="stat"><small>SCORE</small><strong id="score">0</strong></div><div class="stat"><small>TIME</small><strong id="time">60</strong></div><div class="stat"><small>STREAK</small><strong id="streak">0x</strong></div><div class="stat"><small>BEST</small><strong id="best">0</strong></div></section>
+<div class="gamebox"><canvas id="court" width="900" height="560" aria-label="Basketball shooting game"></canvas><div class="overlay" id="overlay"><div class="panel"><div style="font-size:48px">🏀</div><h1 id="panelTitle">READY TO BALL?</h1><p id="panelText">You have 60 seconds to rack up points. Aim with your mouse or finger, then release to shoot. Swish shots build your streak!</p><button class="btn" id="start">START GAME</button></div></div></div>
+<div class="hint">DRAG FROM THE BALL TOWARD THE HOOP • RELEASE TO SHOOT • LONG-RANGE SHOTS = 3 PTS</div>
+<div class="footer"><span>⚡ Every basket speeds up the moving hoop.</span><button id="sound">🔊 Sound on</button><button id="again">↻ Restart</button></div>
+</main>
+<script>
+(()=>{
+const c=document.getElementById('court'),ctx=c.getContext('2d'),$=id=>document.getElementById(id);
+let score=0,time=60,streak=0,bestStreak=0,best=Number(localStorage.getItem('bbBlitzBest')||0),playing=false,last=0,elapsed=0,hoopX=650,hoopDir=1,ball=null,drag=null,shots=[],particles=[],sound=true,audio;
+$('best').textContent=best;
+const W=900,H=560,origin={x:180,y:455};
+function beep(f=500,d=.08){if(!sound)return;try{audio=audio||new(window.AudioContext||window.webkitAudioContext)();let o=audio.createOscillator(),g=audio.createGain();o.connect(g);g.connect(audio.destination);o.frequency.value=f;g.gain.setValueAtTime(.07,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+d);o.start();o.stop(audio.currentTime+d)}catch(e){}}
+function updateHud(){$('score').textContent=score;$('time').textContent=Math.ceil(time);$('streak').textContent=streak+'x';$('best').textContent=best}
+function start(){score=0;time=60;streak=0;bestStreak=0;elapsed=0;hoopX=650;hoopDir=1;ball=null;shots=[];particles=[];playing=true;$('overlay').style.display='none';updateHud();last=performance.now();requestAnimationFrame(loop);beep(660)}
+function end(){playing=false;$('panelTitle').textContent='FINAL BUZZER!';$('panelText').innerHTML=`You scored <b>${score}</b> points with a best streak of <b>${bestStreak}</b>. ${score>=50?'Buckets! Absolute sniper.':score>=25?'Nice shooting. Run it back!':'Keep practicing — you got this!'}`;$('start').textContent='PLAY AGAIN';$('overlay').style.display='flex';beep(220,.25)}
+function rounded(x,y,w,h,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
+function drawCourt(){let g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#d9efff');g.addColorStop(1,'#9fc9e7');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+// arena lights and crowd
+for(let i=0;i<18;i++){ctx.fillStyle=i%2?'#456b8b':'#315776';ctx.fillRect(i*52,90,45,90)}ctx.fillStyle='#eff8ff';ctx.fillRect(0,175,W,8);
+// wood floor
+let f=ctx.createLinearGradient(0,330,0,560);f.addColorStop(0,'#e9a95f');f.addColorStop(1,'#b86c32');ctx.fillStyle=f;ctx.fillRect(0,330,W,230);
+ctx.strokeStyle='#fff2d6';ctx.lineWidth=4;ctx.strokeRect(45,350,810,190);ctx.beginPath();ctx.arc(450,450,90,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(450,350);ctx.lineTo(450,540);ctx.stroke();ctx.strokeRect(hoopX-95,365,190,175);ctx.beginPath();ctx.arc(hoopX-95,450,175,-Math.PI/2,Math.PI/2);ctx.stroke();
+// backboard and hoop
+ctx.fillStyle='#ffffff';ctx.fillRect(hoopX+18,165,12,150);ctx.strokeStyle='#42617b';ctx.lineWidth=5;ctx.strokeRect(hoopX-5,190,52,42);ctx.fillStyle='#ff7d24';ctx.fillRect(hoopX-4,264,82,8);ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(hoopX+1,272);ctx.lineTo(hoopX+12,310);ctx.lineTo(hoopX+62,310);ctx.lineTo(hoopX+75,272);ctx.stroke();for(let i=0;i<5;i++){ctx.beginPath();ctx.moveTo(hoopX+8+i*14,274);ctx.lineTo(hoopX+18+i*10,307);ctx.stroke()}
+// distance markers
+ctx.fillStyle='#234b6b';ctx.font='bold 15px system-ui';ctx.fillText('3 PT RANGE',75,520);ctx.fillText('2 PT RANGE',300,520);
+}
+function drawBall(x,y,r=22){let grad=ctx.createRadialGradient(x-7,y-8,2,x,y,r);grad.addColorStop(0,'#ffbd65');grad.addColorStop(1,'#d64b0e');ctx.fillStyle=grad;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#54240d';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,r*.98,-1.3,1.3);ctx.moveTo(x-r,y);ctx.quadraticCurveTo(x,y+8,x+r,y);ctx.moveTo(x,y-r);ctx.quadraticCurveTo(x-9,y,x,y+r);ctx.stroke()}
+function draw(){drawCourt();if(ball){drawBall(ball.x,ball.y);if(ball.trail){ctx.strokeStyle='#fff8';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(ball.x,ball.y);ctx.lineTo(ball.x-ball.vx*2,ball.y-ball.vy*2);ctx.stroke()}}
+else drawBall(origin.x,origin.y);
+if(drag&&!ball){ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.setLineDash([10,8]);ctx.beginPath();ctx.moveTo(origin.x,origin.y);ctx.lineTo(drag.x,drag.y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#fff';ctx.font='bold 16px system-ui';ctx.fillText('AIM',drag.x+10,drag.y-10)}
+for(let p of particles){ctx.globalAlpha=Math.max(0,p.life/40);ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1;
+if(!playing){ctx.fillStyle='#16324d';ctx.font='bold 20px system-ui';ctx.fillText('READY ON THE BASELINE',30,42)}
+}
+function burst(x,y,color='#ff9a32'){for(let i=0;i<22;i++){let a=Math.random()*Math.PI*2,s=2+Math.random()*6;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:2+Math.random()*4,life:35,color})}}
+function shoot(){if(!playing||ball||!drag)return;let dx=origin.x-drag.x,dy=origin.y-drag.y;let power=Math.min(1.5,Math.max(.55,Math.hypot(dx,dy)/230));let angle=Math.atan2(dy,dx);ball={x:origin.x,y:origin.y,vx:Math.cos(angle)*power*16,vy:-Math.abs(Math.sin(angle))*power*18-3,age:0,trail:true,wasLong:dx>hoopX-origin.x+30};drag=null;beep(360,.05)}
+function loop(now){if(!playing)return;let dt=Math.min((now-last)/16.67,2);last=now;time-=dt/60*60;elapsed+=dt/60; // dt is frame units; convert to seconds
+// correct timer based on real delta
+// dt/60 is seconds
+hoopX+=hoopDir*(1.5+score*.018)*dt;if(hoopX>790){hoopX=790;hoopDir=-1}if(hoopX<560){hoopX=560;hoopDir=1}
+if(ball){ball.age+=dt;ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;ball.vy+=.48*dt;
+// score check at rim height, crossing hoop plane
+if(ball.y>=267&&ball.y<=300&&ball.vy>0&&ball.x>hoopX-5&&ball.x<hoopX+80){let points=ball.wasLong?3:2;streak++;bestStreak=Math.max(bestStreak,streak);let mult=streak>=5?2:1;score+=points*mult;burst(hoopX+35,275);beep(720+streak*40,.12);ball=null;updateHud();}
+else if(ball&&(ball.age>100||ball.y>560||ball.x>950||ball.x<0)){streak=0;ball=null;updateHud();beep(150,.07)}
+}
+particles=particles.filter(p=>p.life>0);for(let p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=.15*dt;p.life-=dt}
+// timer uses elapsed wall seconds
+let remain=Math.max(0,60-(now-gameStart)/1000);time=remain;updateHud();draw();if(remain<=0){if(score>best){best=score;localStorage.setItem('bbBlitzBest',best)}end();return}requestAnimationFrame(loop)}
+let gameStart=0;const originalStart=start;start=function(){gameStart=performance.now();originalStart()};
+function pointer(e){let r=c.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
+c.addEventListener('pointerdown',e=>{if(!playing||ball)return;let p=pointer(e);if(Math.hypot(p.x-origin.x,p.y-origin.y)<100){drag=p;c.setPointerCapture(e.pointerId)}});
+c.addEventListener('pointermove',e=>{if(drag){drag=pointer(e);draw()}});c.addEventListener('pointerup',()=>{if(drag)shoot()});
+$('start').addEventListener('click',start);$('again').addEventListener('click',()=>{if(!playing)start();else{playing=false;start()}});$('sound').addEventListener('click',()=>{sound=!sound;$('sound').textContent=sound?'🔊 Sound on':'🔇 Sound off'});
+draw();
+})();
+</script></body></html>
